@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Accountmanagement viewer - gemeente Delft</title>
+
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+      #featureTableDiv {
+        height: 30%;
+        width: 100%;
+        position: absolute;
+        bottom: 0;
+        z-index: 99;
+      }
+      #buttonContainer {
+        position: absolute;
+        top: 50%;
+        left: 10px;
+        transform: translateY(-50%);
+        z-index: 100;
+      }
+      .filter-button {
+        display: block;
+        margin-bottom: 5px;
+        padding: 10px;
+        background-color: #0079c1;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+      .filter-button.active {
+        background-color: #005a8c;
+      }
+    </style>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css" />
+
+    <script src="https://js.arcgis.com/4.30/"></script>
+
+    <script>
+      require([
+        "esri/config",
+        "esri/views/MapView",
+        "esri/WebMap",
+        "esri/widgets/Editor",
+        "esri/widgets/Legend",
+        "esri/widgets/FeatureTable",
+        "esri/layers/FeatureLayer",
+        "esri/renderers/UniqueValueRenderer"
+      ], (esriConfig, MapView, WebMap, Editor, Legend, FeatureTable, FeatureLayer, UniqueValueRenderer) => {
+        esriConfig.portalUrl = "https://rhk.maps.arcgis.com/";
+        esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurFqir_ZdU2-7FpzvQ2oQTUBzPsKJtoOdLopmxGbkCrruiCVUj4rzO0c1itWgnJ9Hu09tSIqtj-nOiOI62w1PlmpgnwKVal4bAFTFOs604ecjqoOKKx6QoYq9LLXP7P0wB2TiI2OPs1MH5EWpKQxnQuwwPjmbIqT2eHbwFgea8t5JBfinjX_IKnSGf6SGIjWxTvDq2i2DqsASZTei5Hv-QuZs-s9TamJoU-zxVSs4BackAT1_FHCyQnwh";
+
+        const webmap = new WebMap({
+          portalItem: {
+            id: "d3dd9b5003b14fd0ae418239ca2774bd"
+          }
+        });
+
+        const view = new MapView({
+          map: webmap,
+          container: "viewDiv"
+        });
+
+        const editor = new Editor({
+          view: view
+        });
+
+        const legend = new Legend({
+          view: view
+        });
+
+        // Define the symbology
+        const renderer = new UniqueValueRenderer({
+          field: "Status",
+          uniqueValueInfos: [
+            {
+              value: "Kans of lead",
+              symbol: {
+                type: "simple-marker",
+                color: "green",
+                size: "8px"
+              },
+              label: "Kans of lead"
+            },
+            {
+              value: "In uitvoering",
+              symbol: {
+                type: "simple-marker",
+                color: "orange",
+                size: "8px"
+              },
+              label: "In uitvoering"
+            },
+            {
+              value: "Afgerond",
+              symbol: {
+                type: "simple-marker",
+                color: "blue",
+                size: "8px"
+              },
+              label: "Afgerond"
+            }
+          ]
+        });
+
+        // Add the layer back with symbology
+        const featureLayer = new FeatureLayer({
+          portalItem: {
+            id: "04c791cb9f644143a20f086f2eed1a42"
+          },
+          title: "Projecten Delft",
+          renderer: renderer
+        });
+
+        webmap.add(featureLayer);
+
+        const featureTable = new FeatureTable({
+          view: view,
+          layer: featureLayer,
+          editingEnabled: true,
+          container: "featureTableDiv",
+          tableTemplate: {
+            columnTemplates: [
+              {
+                type: "field",
+                fieldName: "Projectcode",
+                label: "Projectcode"
+              },
+              {
+                type: "field",
+                fieldName: "Status",
+                label: "Status"
+              },
+              {
+                type: "field",
+                fieldName: "Projectleider",
+                label: "Projectleider"
+              },
+              {
+                type: "field",
+                fieldName: "BL",
+                label: "BL"
+              }
+            ]
+          }
+        });
+
+        view.ui.add(editor, "top-right");
+        view.ui.add(legend, "top-left");
+        view.ui.add(featureTable, "bottom");
+
+        // Add buttons to the view
+        const buttonContainer = document.createElement("div");
+        buttonContainer.id = "buttonContainer";
+        buttonContainer.innerHTML = `
+          <button class="filter-button" id="KansofleadButton">Kans of lead</button>
+          <button class="filter-button" id="InuitvoeringButton">In uitvoering</button>
+          <button class="filter-button" id="AfgerondButton">Afgerond</button>
+        `;
+        view.ui.add(buttonContainer, "manual");
+
+        // Wait for the LayerView to be created
+        view.whenLayerView(featureLayer).then((layerView) => {
+          console.log("LayerView created:", layerView);
+
+          // Function to toggle filter
+          function toggleFilter(status) {
+            const currentFilter = featureLayer.definitionExpression;
+            if (currentFilter === `Status = '${status}'`) {
+              featureLayer.definitionExpression = null;
+            } else {
+              featureLayer.definitionExpression = `Status = '${status}'`;
+            }
+            featureTable.filter = featureLayer.definitionExpression;
+
+            // Apply the filter to the LayerView
+            layerView.filter = {
+              where: featureLayer.definitionExpression
+            };
+
+            // Update button active state
+            document.querySelectorAll('.filter-button').forEach(button => {
+              button.classList.remove('active');
+            });
+            if (featureLayer.definitionExpression) {
+              const buttonId = `${status.replace(/\s+/g, '')}Button`;
+              document.getElementById(buttonId).classList.add('active');
+            }
+          }
+
+          // Add event listeners to buttons
+          document.getElementById("KansofleadButton").addEventListener("click", () => {
+            toggleFilter("Kans of lead");
+          });
+          document.getElementById("InuitvoeringButton").addEventListener("click", () => {
+            toggleFilter("In uitvoering");
+          });
+          document.getElementById("AfgerondButton").addEventListener("click", () => {
+            toggleFilter("Afgerond");
+          });
+        })
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+    <div id="featureTableDiv"></div>
+  </body>
+</html>
