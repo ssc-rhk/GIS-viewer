@@ -20,6 +20,8 @@
         position: absolute;
         bottom: 0;
         z-index: 99;
+        background-color: white;
+        overflow: auto;
       }
       #buttonContainer {
         position: absolute;
@@ -40,6 +42,18 @@
       .filter-button.active {
         background-color: #005a8c;
       }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+      }
+      th {
+        background-color: #f2f2f2;
+        text-align: left;
+      }
     </style>
 
     <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css" />
@@ -53,12 +67,12 @@
         "esri/WebMap",
         "esri/widgets/Editor",
         "esri/widgets/Legend",
-        "esri/widgets/FeatureTable",
         "esri/layers/FeatureLayer",
-        "esri/renderers/UniqueValueRenderer"
-      ], (esriConfig, MapView, WebMap, Editor, Legend, FeatureTable, FeatureLayer, UniqueValueRenderer) => {
+        "esri/renderers/UniqueValueRenderer",
+        "esri/rest/support/Query"
+      ], (esriConfig, MapView, WebMap, Editor, Legend, FeatureLayer, UniqueValueRenderer, Query) => {
         esriConfig.portalUrl = "https://rhk.maps.arcgis.com/";
-        esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurFqir_ZdU2-7FpzvQ2oQTUBzPsKJtoOdLopmxGbkCrruiCVUj4rzO0c1itWgnJ9Hu09tSIqtj-nOiOI62w1PlmpgnwKVal4bAFTFOs604ecjqoOKKx6QoYq9LLXP7P0wB2TiI2OPs1MH5EWpKQxnQuwwPjmbIqT2eHbwFgea8t5JBfinjX_IKnSGf6SGIjWxTvDq2i2DqsASZTei5Hv-QuZs-s9TamJoU-zxVSs4BackAT1_FHCyQnwh";
+        esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurFqir_ZdU2-7FpzvQ2oQTUAuWOpIEAmR1QIc8QXiFZMpGlWTUv4CC59rmk6AGmhDgqv-CY4S-3qQFVzZ9lI07k_c4kdo2szk6tkbgbZCyiazyoP159cmRGQlxg3VOZUuWvN4Bnk1_nF9ZSW2TAsLs9_pfIm790Z8DyTra4A5k6UG3Iv73JcrW7uX1qKlgUXFWG-z9jiPbDAPAEetHVy6ZjxdDu6K7-gCxoE0gAL6fzczAT1_FHCyQnwh";
 
         const webmap = new WebMap({
           portalItem: {
@@ -113,51 +127,73 @@
           ]
         });
 
+
+        // Define the symbology
+        const renderer2 = new UniqueValueRenderer({
+  field: "Status",
+  uniqueValueInfos: [
+    {
+      value: "Kans of lead",
+      symbol: {
+        type: "simple-fill",
+        color: "rgba(0, 128, 0, 0.15)",
+        outline: {
+          color: "green",
+          width: 1
+        }
+      },
+      label: "Kans of lead"
+    },
+    {
+      value: "In uitvoering",
+      symbol: {
+        type: "simple-fill",
+        color: "rgba(255, 165, 0, 0.15)",
+        outline: {
+          color: "orange",
+          width: 1
+        }
+      },
+      label: "In uitvoering"
+    },
+    {
+      value: "Afgerond",
+      symbol: {
+        type: "simple-fill",
+        color: "rgba(0, 0, 255, 0.15)",
+        outline: {
+          color: "blue",
+          width: 1
+        }
+      },
+      label: "Afgerond"
+    }
+  ]
+});
+
+
         // Add the layer back with symbology
         const featureLayer = new FeatureLayer({
           portalItem: {
             id: "04c791cb9f644143a20f086f2eed1a42"
           },
-          title: "Projecten Delft",
+          title: "Projecten Delft - punten",
           renderer: renderer
         });
 
-        webmap.add(featureLayer);
-
-        const featureTable = new FeatureTable({
-          view: view,
-          layer: featureLayer,
-          editingEnabled: true,
-          container: "featureTableDiv",
-          tableTemplate: {
-            columnTemplates: [
-              {
-                type: "field",
-                fieldName: "Projectcode",
-                label: "Projectcode"
-              },
-              {
-                type: "field",
-                fieldName: "Status",
-                label: "Status"
-              },
-              {
-                type: "field",
-                fieldName: "Projectleider",
-                label: "Projectleider"
-              },
-              {
-                type: "field",
-                fieldName: "BL",
-                label: "BL"
-              }
-            ]
-          }
+        const featureLayer2 = new FeatureLayer({
+          portalItem: {
+            id: "66f5c4be2d8b472792d64213695280ec"
+          },
+          title: "Projecten Delft - vlakken",
+          renderer: renderer2
         });
+
+        webmap.add(featureLayer);
+        webmap.add(featureLayer2);
 
         view.ui.add(editor, "top-right");
         view.ui.add(legend, "top-left");
-        view.ui.add(featureTable, "bottom");
 
         // Add buttons to the view
         const buttonContainer = document.createElement("div");
@@ -169,46 +205,124 @@
         `;
         view.ui.add(buttonContainer, "manual");
 
+        // Define headers in a scope accessible to both table creation and filtering
+        let headers = [];
+
+        // Function to filter the table
+        function filterTable(status) {
+          const rows = document.querySelectorAll("#featureTableDiv tbody tr");
+          rows.forEach(row => {
+            const statusCell = row.querySelector(`td:nth-child(${headers.indexOf("Status") + 1})`);
+            if (statusCell && statusCell.textContent === status) {
+              row.style.display = "";
+            } else {
+              row.style.display = "none";
+            }
+          });
+        }
+
+        // Function to clear the table filter
+        function clearTableFilter() {
+          const rows = document.querySelectorAll("#featureTableDiv tbody tr");
+          rows.forEach(row => {
+            row.style.display = "";
+          });
+        }
+
         // Wait for the LayerView to be created
         view.whenLayerView(featureLayer).then((layerView) => {
-          console.log("LayerView created:", layerView);
+          view.whenLayerView(featureLayer2).then((layerView2) => {
+            console.log("LayerViews created:", layerView, layerView2);
 
-          // Function to toggle filter
-          function toggleFilter(status) {
-            const currentFilter = featureLayer.definitionExpression;
-            if (currentFilter === `Status = '${status}'`) {
-              featureLayer.definitionExpression = null;
-            } else {
-              featureLayer.definitionExpression = `Status = '${status}'`;
+            // Function to toggle filter
+            function toggleFilter(status) {
+              const currentFilter = featureLayer.definitionExpression;
+              if (currentFilter === `Status = '${status}'`) {
+                featureLayer.definitionExpression = null;
+                featureLayer2.definitionExpression = null;
+                clearTableFilter();
+              } else {
+                featureLayer.definitionExpression = `Status = '${status}'`;
+                featureLayer2.definitionExpression = `Status = '${status}'`;
+                filterTable(status);
+              }
+
+              // Apply the filter to the LayerViews
+              layerView.filter = {
+                where: featureLayer.definitionExpression
+              };
+              layerView2.filter = {
+                where: featureLayer2.definitionExpression
+              };
+
+              // Update button active state
+              document.querySelectorAll('.filter-button').forEach(button => {
+                button.classList.remove('active');
+              });
+              if (featureLayer.definitionExpression) {
+                const buttonId = `${status.replace(/\s+/g, '')}Button`;
+                document.getElementById(buttonId).classList.add('active');
+              }
             }
-            featureTable.filter = featureLayer.definitionExpression;
 
-            // Apply the filter to the LayerView
-            layerView.filter = {
-              where: featureLayer.definitionExpression
-            };
-
-            // Update button active state
-            document.querySelectorAll('.filter-button').forEach(button => {
-              button.classList.remove('active');
+            // Add event listeners to buttons
+            document.getElementById("KansofleadButton").addEventListener("click", () => {
+              toggleFilter("Kans of lead");
             });
-            if (featureLayer.definitionExpression) {
-              const buttonId = `${status.replace(/\s+/g, '')}Button`;
-              document.getElementById(buttonId).classList.add('active');
-            }
-          }
+            document.getElementById("InuitvoeringButton").addEventListener("click", () => {
+              toggleFilter("In uitvoering");
+            });
+            document.getElementById("AfgerondButton").addEventListener("click", () => {
+              toggleFilter("Afgerond");
+            });
+          });
+        });
+        // Query features from both layers and combine them
+        const query = new Query();
+        query.where = "1=1";
+        query.outFields = ["*"];
+        query.returnGeometry = false;
 
-          // Add event listeners to buttons
-          document.getElementById("KansofleadButton").addEventListener("click", () => {
-            toggleFilter("Kans of lead");
+        Promise.all([
+          featureLayer.queryFeatures(query),
+          featureLayer2.queryFeatures(query)
+        ]).then((results) => {
+          const combinedAttributes = results[0].features.map(f => f.attributes).concat(results[1].features.map(f => f.attributes));
+
+          // Create a table to display the combined attributes
+          const table = document.createElement("table");
+          const thead = document.createElement("thead");
+          const tbody = document.createElement("tbody");
+
+          // Define headers
+          headers = ["Projectcode", "Thema", "Status", ...Object.keys(combinedAttributes[0]).filter(header => !["OBJECTID", "Projectcode", "Thema", "Status"].includes(header))];
+          const headerRow = document.createElement("tr");
+          headers.forEach(header => {
+            const th = document.createElement("th");
+            th.textContent = header;
+            headerRow.appendChild(th);
           });
-          document.getElementById("InuitvoeringButton").addEventListener("click", () => {
-            toggleFilter("In uitvoering");
+          thead.appendChild(headerRow);
+
+          // Create table rows
+          combinedAttributes.forEach(attr => {
+            const row = document.createElement("tr");
+            headers.forEach(header => {
+              const td = document.createElement("td");
+              td.textContent = attr[header];
+              row.appendChild(td);
+            });
+            tbody.appendChild(row);
           });
-          document.getElementById("AfgerondButton").addEventListener("click", () => {
-            toggleFilter("Afgerond");
-          });
-        })
+
+          table.appendChild(thead);
+          table.appendChild(tbody);
+
+          // Add the table to the featureTableDiv
+          const featureTableDiv = document.getElementById("featureTableDiv");
+          featureTableDiv.innerHTML = ""; // Clear any existing content
+          featureTableDiv.appendChild(table);
+        });
       });
     </script>
   </head>
